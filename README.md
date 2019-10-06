@@ -9,4 +9,4 @@
 - Ruby
   - verson 2.6.3
 - MySQL
-  - version 8
+  - version 5.7
