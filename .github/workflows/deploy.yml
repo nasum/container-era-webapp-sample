@@ -1,0 +1,68 @@
+name: deploy
+on: 
+  push:
+    branches: master
+jobs:
+  build-image:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@master
+      - name: Setup Python 3.7 for awscli
+        uses: actions/setup-python@v1
+        with:
+          version: '3.7'
+          architecture: 'x64'
+      - name: Install awscli
+        run: pip install --upgrade pip awscli
+      - name: Login to ECR
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-1
+        run: |
+          $(aws ecr get-login --no-include-email --region ap-northeast-1)
+      - name: Build & Push Image
+        env:
+          ECR_DOMAIN: ${{ secrets.ECR_DOMAIN }}
+        run: |
+          docker build -t ${ECR_DOMAIN}:latest .
+          docker push ${ECR_DOMAIN}:latest
+  deploy:
+    runs-on: ubuntu-18.04
+    needs: [build-image]
+    steps:
+      - uses: actions/checkout@master
+      - name: Setup Python 3.7 for awscli
+        uses: actions/setup-python@v1
+        with:
+          version: '3.7'
+          architecture: 'x64'
+      - name: Install awscli
+        run: pip install --upgrade pip awscli
+      - name: Login to ECR
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-1
+        run: |
+          $(aws ecr get-login --no-include-email --region ap-northeast-1)
+      - name: install jq
+        run: |
+          wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+          mv jq-linux64 jq
+      - name: deploy
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-1
+        run: |
+          aws ecs describe-task-definition --task-definition webapp-service | jq  '.taskDefinition | { containerDefinitions: .containerDefinitions }' > definition.json
+          aws ecs register-task-definition --execution-role-arn arn:aws:iam::262576183096:role/ecs-task-role --family webapp-service --cli-input-json file://definition.json
+          aws ecs update-service --cluster sample-ecs-cluster --service webapp-service --task-definition webapp-service
+      - name: migrations
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-northeast-1
+        run: |
+          aws ecs run-task --cluster sample-ecs-cluster --task-definition webapp-migration

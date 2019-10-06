@@ -1,0 +1,28 @@
+version: "3"
+services:
+  app:
+    build:
+      context: .
+    volumes:
+      - .:/app:cached
+    ports:
+      - "4567:4567"
+    links:
+      - db
+    depends_on:
+      - db
+    entrypoint: bash -c
+    environment:
+      RACK_ENV: production
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: ""
+    command: |
+      "bundle install && \
+      bundle exec ruby app.rb -o 0.0.0.0"
+  db:
+    image: mysql:5.7
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "3306:3306"
